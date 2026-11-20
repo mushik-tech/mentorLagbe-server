@@ -57,8 +57,27 @@ app.patch("/users/:email/role", async (req, res) => {
 app.get("/tuitions", async (req, res) => {
   let query = {};
 
-  if (req.params.tutorEmail) {
-    query.tutorEmail = req.params.tutorEmail;
+  if (req.query.tutorEmail) {
+    query.tutorEmail = req.query.tutorEmail;
+  }
+
+  if (req.query.subject) {
+    query.subject = req.query.subject;
+  }
+  if (req.query.level) {
+    query.classLevel = req.query.level;
+  }
+  if (req.query.mode) {
+    query.mode = req.query.mode;
+  }
+
+  if (req.query.search) {
+    query = {
+      $or: [
+        { title: { $regex: req.query.search, $options: "i" } },
+        { subject: { $regex: req.query.search, $options: "i" } },
+      ],
+    };
   }
 
   const cursor = tuitionsCollection.find(query);
