@@ -55,9 +55,23 @@ app.patch("/users/:email/role", async (req, res) => {
 });
 
 app.get("/tuitions", async (req, res) => {
-  const cursor = tuitionsCollection.find();
+  let query = {};
+
+  if (req.params.tutorEmail) {
+    query.tutorEmail = req.params.tutorEmail;
+  }
+
+  const cursor = tuitionsCollection.find(query);
   const tuitions = await cursor.toArray();
   res.status(200).json(tuitions);
+});
+
+app.get("/tuitions/:email/count", async (req, res) => {
+  const { email } = req.params;
+
+  const count = await tuitionsCollection.countDocuments({ tutorEmail: email });
+
+  res.status(200).json({ count });
 });
 
 app.post("/tuitions", async (req, res) => {
@@ -84,5 +98,31 @@ app.patch("/tuitions/:id/status", async (req, res) => {
 
   const result = await tuitionsCollection.updateOne(filter, updatedDoc);
 
+  res.status(200).json(result);
+});
+
+app.patch("/tuitions/:id/active", async (req, res) => {
+  const { id } = req.params;
+  const { isActive } = req.body;
+
+  console.log(isActive);
+
+  const filter = {
+    _id: new ObjectId(id),
+  };
+  const updatedDoc = {
+    $set: {
+      isActive: !isActive,
+    },
+  };
+
+  const result = await tuitionsCollection.updateOne(filter, updatedDoc);
+
+  res.status(200).json(result);
+});
+
+app.delete("/tuitions/:id", async (req, res) => {
+  const { id } = req.params;
+  const result = await tuitionsCollection.deleteOne({ _id: new ObjectId(id) });
   res.status(200).json(result);
 });
