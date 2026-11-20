@@ -30,6 +30,7 @@ const connectedClient = await startServer();
 
 const db = connectedClient.db(process.env.DB_NAME);
 const usersCollection = db.collection("user");
+const tutionsCollection = db.collection("tutions");
 
 app.get("/", (req, res) => {
   res.send("Hello World!");
@@ -38,5 +39,33 @@ app.get("/", (req, res) => {
 app.get("/users", async (req, res) => {
   const cursor = usersCollection.find();
   const users = await cursor.toArray();
-  res.send(users);
+  res.status(200).json(users);
 });
+
+app.patch("/users/:email/role", async (req, res) => {
+  const email = req.params.email;
+  const updateData = req.body;
+  const updatedDoc = {
+    $set: {
+      role: updateData.role,
+    },
+  };
+  const result = await usersCollection.updateOne({ email }, updatedDoc);
+  res.status(200).json(result);
+});
+
+app.get("/tutions", async (req, res) => {
+  const cursor = tutionsCollection.find();
+  const tutions = await cursor.toArray();
+  res.status(200).json(tutions);
+});
+
+app.post("/tutions", async (req, res) => {
+  const tution = req.body;
+  tution.createdAt = new Date();
+  tution.isActive = true;
+  tution.approvalStatus = "pending";
+  const result = await tutionsCollection.insertOne(tution);
+  res.status(201).json(result);
+});
+
