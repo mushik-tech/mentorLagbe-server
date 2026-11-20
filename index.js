@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 
 import dotenv from "dotenv";
 dotenv.config();
@@ -30,7 +30,7 @@ const connectedClient = await startServer();
 
 const db = connectedClient.db(process.env.DB_NAME);
 const usersCollection = db.collection("user");
-const tutionsCollection = db.collection("tutions");
+const tuitionsCollection = db.collection("tutions");
 
 app.get("/", (req, res) => {
   res.send("Hello World!");
@@ -54,18 +54,35 @@ app.patch("/users/:email/role", async (req, res) => {
   res.status(200).json(result);
 });
 
-app.get("/tutions", async (req, res) => {
-  const cursor = tutionsCollection.find();
-  const tutions = await cursor.toArray();
-  res.status(200).json(tutions);
+app.get("/tuitions", async (req, res) => {
+  const cursor = tuitionsCollection.find();
+  const tuitions = await cursor.toArray();
+  res.status(200).json(tuitions);
 });
 
-app.post("/tutions", async (req, res) => {
-  const tution = req.body;
-  tution.createdAt = new Date();
-  tution.isActive = true;
-  tution.approvalStatus = "pending";
-  const result = await tutionsCollection.insertOne(tution);
+app.post("/tuitions", async (req, res) => {
+  const tuition = req.body;
+  tuition.createdAt = new Date();
+  tuition.isActive = true;
+  tuition.approvalStatus = "pending";
+  const result = await tuitionsCollection.insertOne(tuition);
   res.status(201).json(result);
 });
 
+app.patch("/tuitions/:id/status", async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  const filter = {
+    _id: new ObjectId(id),
+  };
+  const updatedDoc = {
+    $set: {
+      approvalStatus: status,
+    },
+  };
+
+  const result = await tuitionsCollection.updateOne(filter, updatedDoc);
+
+  res.status(200).json(result);
+});
