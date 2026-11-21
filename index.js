@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import Stripe from "stripe";
 import { MongoClient, ObjectId } from "mongodb";
 
 import dotenv from "dotenv";
@@ -12,6 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 const client = new MongoClient(process.env.MONGODB_URI);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const startServer = async () => {
   try {
@@ -32,6 +34,7 @@ const db = connectedClient.db(process.env.DB_NAME);
 const usersCollection = db.collection("user");
 const tuitionsCollection = db.collection("tutions");
 const applicationsCollection = db.collection("applications");
+const paymentCollection = db.collection("payments");
 
 app.get("/", (req, res) => {
   res.send("Hello World!");
@@ -208,5 +211,72 @@ app.delete("/applications/:id", async (req, res) => {
   const result = await applicationsCollection.deleteOne({
     _id: new ObjectId(id),
   });
+  res.status(200).json(result);
+});
+
+app.post("/payments", async (req, res) => {
+  const { sessionId } = req.body;
+
+  if (!sessionId) {
+    return res.json({ success: false, message: "Session ID is required" });
+  }
+
+  const {
+    customer_email,
+    metadata,
+    amount_total,
+    currency,
+    payment_intent,
+    status,
+    payment_status,
+  } = await stripe.checkout.sessions.retrieve(sessionId);
+
+  if (status === "complete" && payment_status === "paid") {
+    const sessionQuery = { stripeSessionId: sessionId };
+
+    const isExistPayment = await paymentCollection.findOne(sessionQuery);
+
+    if (isExistPayment) {
+      return res.json({ success: false, message: "Payment already verified" });
+    }
+
+    const paymentInfo = {
+      userEmail: customer_email,
+      userName: metadata.userName,
+      userRole: metadata.userRole,
+      planName: metadata.planName,
+      amount: amount_total / 100,
+      currency: currency,
+      transactionId: payment_intent,
+      stripeSessionId: sessionId,
+      paymentStatus: "paid",
+      paidAt: new Date(),
+    };
+
+    const result = await paymentCollection.insertOne(paymentInfo);
+
+    const userQuery = { email: customer_email };
+
+    const updatedDoc = {
+      $set: {
+        subscriptionPlan: "pro",
+      },
+    };
+
+    const updatedResult = await usersCollection.updateOne(
+      userQuery,
+      updatedDoc,
+    );
+
+    res.json({ success: true, result, updatedResult });
+    return;
+  }
+
+  res.json({ success: false, message: "Payment verification failed" });
+});
+
+app.get("/payments", async (req, res) => {
+  const cursor = paymentCollection.find();
+  const result = await cursor.toArray();
   res.status(200).json(result);
 });
