@@ -154,7 +154,17 @@ app.delete("/tuitions/:id", async (req, res) => {
 });
 
 app.get("/applications", async (req, res) => {
-  const cursor = applicationsCollection.find();
+  let query = {};
+
+  if (req.query.studentEmail) {
+    query.studentEmail = req.query.studentEmail;
+  }
+
+  if (req.query.tutorEmail) {
+    query.tutorEmail = req.query.tutorEmail;
+  }
+
+  const cursor = applicationsCollection.find(query);
   const applications = await cursor.toArray();
   res.status(200).json(applications);
 });
@@ -178,4 +188,12 @@ app.post("/applications", async (req, res) => {
 
   const result = await applicationsCollection.insertOne(application);
   res.status(201).json(result);
+});
+
+app.delete("/applications/:id", async (req, res) => {
+  const { id } = req.params;
+  const result = await applicationsCollection.deleteOne({
+    _id: new ObjectId(id),
+  });
+  res.status(200).json(result);
 });
