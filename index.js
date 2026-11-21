@@ -147,8 +147,6 @@ app.patch("/tuitions/:id/active", async (req, res) => {
   const { id } = req.params;
   const { isActive } = req.body;
 
-  console.log(isActive);
-
   const filter = {
     _id: new ObjectId(id),
   };
@@ -185,6 +183,16 @@ app.get("/applications", async (req, res) => {
   res.status(200).json(applications);
 });
 
+app.get("/applications/:email/count", async (req, res) => {
+  const { email } = req.params;
+
+  const count = await applicationsCollection.countDocuments({
+    studentEmail: email,
+  });
+
+  res.status(200).json({ count });
+});
+
 app.post("/applications", async (req, res) => {
   const application = req.body;
   application.appliedAt = new Date();
@@ -204,6 +212,24 @@ app.post("/applications", async (req, res) => {
 
   const result = await applicationsCollection.insertOne(application);
   res.status(201).json(result);
+});
+
+app.patch("/applications/:id/status", async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  const filter = {
+    _id: new ObjectId(id),
+  };
+  const updatedDoc = {
+    $set: {
+      status: status,
+    },
+  };
+
+  const result = await applicationsCollection.updateOne(filter, updatedDoc);
+
+  res.status(200).json(result);
 });
 
 app.delete("/applications/:id", async (req, res) => {
