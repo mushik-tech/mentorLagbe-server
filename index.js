@@ -31,6 +31,7 @@ const connectedClient = await startServer();
 const db = connectedClient.db(process.env.DB_NAME);
 const usersCollection = db.collection("user");
 const tuitionsCollection = db.collection("tutions");
+const applicationsCollection = db.collection("applications");
 
 app.get("/", (req, res) => {
   res.send("Hello World!");
@@ -150,4 +151,31 @@ app.delete("/tuitions/:id", async (req, res) => {
   const { id } = req.params;
   const result = await tuitionsCollection.deleteOne({ _id: new ObjectId(id) });
   res.status(200).json(result);
+});
+
+app.get("/applications", async (req, res) => {
+  const cursor = applicationsCollection.find();
+  const applications = await cursor.toArray();
+  res.status(200).json(applications);
+});
+
+app.post("/applications", async (req, res) => {
+  const application = req.body;
+  application.appliedAt = new Date();
+  application.status = "pending";
+
+  const isExistQuery = {
+    tuitionId: application.tuitionId,
+    studentEmail: application.studentEmail,
+  };
+
+  const isExist = await applicationsCollection.findOne(isExistQuery);
+
+  if (isExist) {
+    res.status(409).json({ message: "Already applied" });
+    return;
+  }
+
+  const result = await applicationsCollection.insertOne(application);
+  res.status(201).json(result);
 });
