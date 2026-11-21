@@ -55,6 +55,19 @@ app.patch("/users/:email/role", async (req, res) => {
   res.status(200).json(result);
 });
 
+app.patch("/users/:id", async (req, res) => {
+  const id = req.params.id;
+  const updateData = req.body;
+  const updatedDoc = {
+    $set: updateData,
+  };
+  const result = await usersCollection.updateOne(
+    { _id: new ObjectId(id) },
+    updatedDoc,
+  );
+  res.status(200).json(result);
+});
+
 app.get("/tuitions", async (req, res) => {
   let query = {};
 
