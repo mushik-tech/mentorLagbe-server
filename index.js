@@ -85,6 +85,12 @@ app.get("/tuitions", async (req, res) => {
   res.status(200).json(tuitions);
 });
 
+app.get("/tuitions/:id", async (req, res) => {
+  const { id } = req.params;
+  const result = await tuitionsCollection.findOne({ _id: new ObjectId(id) });
+  res.status(200).json(result);
+});
+
 app.get("/tuitions/:email/count", async (req, res) => {
   const { email } = req.params;
 
