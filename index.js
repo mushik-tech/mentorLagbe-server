@@ -111,19 +111,6 @@ app.patch("/users/:email/role", verifyToken, verifyAdmin, async (req, res) => {
   res.status(200).json(result);
 });
 
-app.patch("/users/:id", verifyToken, async (req, res) => {
-  const id = req.params.id;
-  const updateData = req.body;
-  const updatedDoc = {
-    $set: updateData,
-  };
-  const result = await usersCollection.updateOne(
-    { _id: new ObjectId(id) },
-    updatedDoc,
-  );
-  res.status(200).json(result);
-});
-
 app.get("/featured-tuitions", async (req, res) => {
   const query = {
     isActive: true,
@@ -263,6 +250,22 @@ app.patch(
     res.status(200).json(result);
   },
 );
+
+app.patch("/tuitions/:id", verifyToken, verifyTutor, async (req, res) => {
+  const { id } = req.params;
+  const data = req.body;
+
+  const filter = {
+    _id: new ObjectId(id),
+  };
+  const updatedDoc = {
+    $set: data,
+  };
+
+  const result = await tuitionsCollection.updateOne(filter, updatedDoc);
+
+  res.status(200).json(result);
+});
 
 app.delete("/tuitions/:id", verifyToken, verifyTutor, async (req, res) => {
   const { id } = req.params;
@@ -437,3 +440,203 @@ app.get("/payments", verifyToken, verifyAdmin, async (req, res) => {
   const result = await cursor.toArray();
   res.status(200).json(result);
 });
+
+app.get(
+  "/dashboard/student/stats",
+  verifyToken,
+  verifyStudent,
+  async (req, res) => {
+    const email = req.user.email;
+
+    const pipeline = [
+      { $match: { email } },
+
+      {
+        $lookup: {
+          from: "applications",
+          localField: "email",
+          foreignField: "studentEmail",
+          as: "applications",
+        },
+      },
+
+      {
+        $project: {
+          _id: 0,
+          totalAppliedTuitions: { $size: "$applications" },
+
+          acceptedApplications: {
+            $size: {
+              $filter: {
+                input: "$applications",
+                cond: { $eq: ["$$this.status", "accepted"] },
+              },
+            },
+          },
+
+          pendingApplications: {
+            $size: {
+              $filter: {
+                input: "$applications",
+                cond: { $eq: ["$$this.status", "pending"] },
+              },
+            },
+          },
+
+          currentPlan: { $ifNull: ["$subscriptionPlan", "free"] },
+        },
+      },
+    ];
+
+    const stats = await usersCollection.aggregate(pipeline).toArray();
+
+    res.status(200).json(stats[0]);
+  },
+);
+
+app.get(
+  "/dashboard/tutor/stats",
+  verifyToken,
+  verifyTutor,
+  async (req, res) => {
+    const email = req.user.email;
+
+    const pipeline = [
+      { $match: { email } },
+
+      {
+        $lookup: {
+          from: "tutions",
+          localField: "email",
+          foreignField: "tutorEmail",
+          as: "tuitions",
+        },
+      },
+
+      {
+        $lookup: {
+          from: "applications",
+          localField: "email",
+          foreignField: "tutorEmail",
+          as: "applications",
+        },
+      },
+
+      {
+        $project: {
+          _id: 0,
+          totalTuitionsPosted: { $size: "$tuitions" },
+
+          activeApprovedTuitions: {
+            $size: {
+              $filter: {
+                input: "$tuitions",
+                cond: {
+                  $and: [
+                    { $eq: ["$$this.isActive", true] },
+                    { $eq: ["$$this.approvalStatus", "approved"] },
+                  ],
+                },
+              },
+            },
+          },
+
+          totalApplicantsReceived: { $size: "$applications" },
+
+          currentPlan: { $ifNull: ["$subscriptionPlan", "free"] },
+        },
+      },
+    ];
+
+    const stats = await usersCollection.aggregate(pipeline).toArray();
+
+    res.status(200).json(stats[0]);
+  },
+);
+
+app.get(
+  "/dashboard/admin/stats",
+  verifyToken,
+  verifyAdmin,
+  async (req, res) => {
+    const pipeline = [
+      {
+        $facet: {
+          userStats: [
+            {
+              $group: {
+                _id: null,
+                totalUsers: { $sum: 1 },
+                totalTutors: {
+                  $sum: { $cond: [{ $eq: ["$role", "tutor"] }, 1, 0] },
+                },
+              },
+            },
+          ],
+
+          tuitionStats: [
+            {
+              $lookup: {
+                from: "tutions",
+                pipeline: [
+                  {
+                    $group: {
+                      _id: null,
+                      pendingTuitions: {
+                        $sum: {
+                          $cond: [
+                            { $eq: ["$approvalStatus", "pending"] },
+                            1,
+                            0,
+                          ],
+                        },
+                      },
+                      approvedTuitions: {
+                        $sum: {
+                          $cond: [
+                            { $eq: ["$approvalStatus", "approved"] },
+                            1,
+                            0,
+                          ],
+                        },
+                      },
+                    },
+                  },
+                ],
+                as: "stats",
+              },
+            },
+            { $unwind: "$stats" },
+            { $replaceRoot: { newRoot: "$stats" } },
+          ],
+
+          paymentStats: [
+            {
+              $lookup: {
+                from: "payments",
+                pipeline: [
+                  { $match: { paymentStatus: "paid" } },
+                  {
+                    $group: {
+                      _id: null,
+                      totalStripeRevenue: { $sum: "$amount" },
+                    },
+                  },
+                ],
+                as: "stats",
+              },
+            },
+            { $unwind: "$stats" },
+            { $replaceRoot: { newRoot: "$stats" } },
+          ],
+        },
+      },
+    ];
+
+    const stats = await usersCollection.aggregate(pipeline).toArray();
+
+    res.status(200).json(stats[0]);
+  },
+);
+
+export default app;
