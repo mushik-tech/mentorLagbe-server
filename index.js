@@ -170,6 +170,11 @@ app.get("/public-tuitions", async (req, res) => {
 app.get("/tuitions", verifyToken, async (req, res) => {
   let query = {};
 
+  if (req.user.role === "student") {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+
   if (req.query.tutorEmail) {
     if (req.user.email !== req.query.tutorEmail) {
       res.status(403).json({ message: "Forbidden" });
@@ -189,15 +194,22 @@ app.get("/tuitions/:id", async (req, res) => {
   res.status(200).json(result);
 });
 
-app.get("/tuitions/:email/count", async (req, res) => {
-  const { email } = req.params;
+app.get(
+  "/tuitions/:email/count",
+  verifyToken,
+  verifyTutor,
+  async (req, res) => {
+    const { email } = req.params;
 
-  const count = await tuitionsCollection.countDocuments({ tutorEmail: email });
+    const count = await tuitionsCollection.countDocuments({
+      tutorEmail: email,
+    });
 
-  res.status(200).json({ count });
-});
+    res.status(200).json({ count });
+  },
+);
 
-app.post("/tuitions", async (req, res) => {
+app.post("/tuitions", verifyToken, verifyTutor, async (req, res) => {
   const tuition = req.body;
   tuition.createdAt = new Date();
   tuition.isActive = true;
@@ -229,25 +241,30 @@ app.patch(
   },
 );
 
-app.patch("/tuitions/:id/active", async (req, res) => {
-  const { id } = req.params;
-  const { isActive } = req.body;
+app.patch(
+  "/tuitions/:id/active",
+  verifyToken,
+  verifyTutor,
+  async (req, res) => {
+    const { id } = req.params;
+    const { isActive } = req.body;
 
-  const filter = {
-    _id: new ObjectId(id),
-  };
-  const updatedDoc = {
-    $set: {
-      isActive: !isActive,
-    },
-  };
+    const filter = {
+      _id: new ObjectId(id),
+    };
+    const updatedDoc = {
+      $set: {
+        isActive: !isActive,
+      },
+    };
 
-  const result = await tuitionsCollection.updateOne(filter, updatedDoc);
+    const result = await tuitionsCollection.updateOne(filter, updatedDoc);
 
-  res.status(200).json(result);
-});
+    res.status(200).json(result);
+  },
+);
 
-app.delete("/tuitions/:id", async (req, res) => {
+app.delete("/tuitions/:id", verifyToken, verifyTutor, async (req, res) => {
   const { id } = req.params;
   const result = await tuitionsCollection.deleteOne({ _id: new ObjectId(id) });
   res.status(200).json(result);
@@ -255,6 +272,10 @@ app.delete("/tuitions/:id", async (req, res) => {
 
 app.get("/applications", verifyToken, async (req, res) => {
   let query = {};
+
+  if (req.user.role === "admin") {
+    res.status(403).json({ message: "Forbidden" });
+  }
 
   if (req.query.studentEmail) {
     if (req.user.email !== req.query.studentEmail) {
@@ -278,17 +299,22 @@ app.get("/applications", verifyToken, async (req, res) => {
   res.status(200).json(applications);
 });
 
-app.get("/applications/:email/count", async (req, res) => {
-  const { email } = req.params;
+app.get(
+  "/applications/:email/count",
+  verifyToken,
+  verifyStudent,
+  async (req, res) => {
+    const { email } = req.params;
 
-  const count = await applicationsCollection.countDocuments({
-    studentEmail: email,
-  });
+    const count = await applicationsCollection.countDocuments({
+      studentEmail: email,
+    });
 
-  res.status(200).json({ count });
-});
+    res.status(200).json({ count });
+  },
+);
 
-app.post("/applications", async (req, res) => {
+app.post("/applications", verifyToken, verifyStudent, async (req, res) => {
   const application = req.body;
   application.appliedAt = new Date();
   application.status = "pending";
@@ -309,31 +335,41 @@ app.post("/applications", async (req, res) => {
   res.status(201).json(result);
 });
 
-app.patch("/applications/:id/status", async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
+app.patch(
+  "/applications/:id/status",
+  verifyToken,
+  verifyTutor,
+  async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
 
-  const filter = {
-    _id: new ObjectId(id),
-  };
-  const updatedDoc = {
-    $set: {
-      status: status,
-    },
-  };
+    const filter = {
+      _id: new ObjectId(id),
+    };
+    const updatedDoc = {
+      $set: {
+        status: status,
+      },
+    };
 
-  const result = await applicationsCollection.updateOne(filter, updatedDoc);
+    const result = await applicationsCollection.updateOne(filter, updatedDoc);
 
-  res.status(200).json(result);
-});
+    res.status(200).json(result);
+  },
+);
 
-app.delete("/applications/:id", async (req, res) => {
-  const { id } = req.params;
-  const result = await applicationsCollection.deleteOne({
-    _id: new ObjectId(id),
-  });
-  res.status(200).json(result);
-});
+app.delete(
+  "/applications/:id",
+  verifyToken,
+  verifyStudent,
+  async (req, res) => {
+    const { id } = req.params;
+    const result = await applicationsCollection.deleteOne({
+      _id: new ObjectId(id),
+    });
+    res.status(200).json(result);
+  },
+);
 
 app.post("/payments", async (req, res) => {
   const { sessionId } = req.body;
