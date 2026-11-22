@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { MongoClient, ObjectId } from "mongodb";
 
 import dotenv from "dotenv";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 dotenv.config();
 
 const app = express();
@@ -40,13 +41,65 @@ app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
-app.get("/users", async (req, res) => {
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  if (!token) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const JWKS = createRemoteJWKSet(
+    new URL(`${process.env.FRONTEND_URL}/api/auth/jwks`),
+  );
+
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+    req.user = payload;
+    next();
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+const verifyAdmin = async (req, res, next) => {
+  if (req.user.role !== "admin") {
+    res.status(403).send({ message: "Forbidden" });
+    return;
+  }
+  next();
+};
+
+const verifyTutor = async (req, res, next) => {
+  if (req.user.role !== "tutor") {
+    res.status(403).send({ message: "Forbidden" });
+    return;
+  }
+  next();
+};
+const verifyStudent = async (req, res, next) => {
+  if (req.user.role !== "student") {
+    res.status(403).send({ message: "Forbidden" });
+    return;
+  }
+  next();
+};
+
+app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
   const cursor = usersCollection.find();
   const users = await cursor.toArray();
   res.status(200).json(users);
 });
 
-app.patch("/users/:email/role", async (req, res) => {
+app.patch("/users/:email/role", verifyToken, verifyAdmin, async (req, res) => {
   const email = req.params.email;
   const updateData = req.body;
   const updatedDoc = {
@@ -58,7 +111,7 @@ app.patch("/users/:email/role", async (req, res) => {
   res.status(200).json(result);
 });
 
-app.patch("/users/:id", async (req, res) => {
+app.patch("/users/:id", verifyToken, async (req, res) => {
   const id = req.params.id;
   const updateData = req.body;
   const updatedDoc = {
@@ -114,10 +167,14 @@ app.get("/public-tuitions", async (req, res) => {
   res.status(200).json(tuitions);
 });
 
-app.get("/tuitions", async (req, res) => {
+app.get("/tuitions", verifyToken, async (req, res) => {
   let query = {};
 
   if (req.query.tutorEmail) {
+    if (req.user.email !== req.query.tutorEmail) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
     query.tutorEmail = req.query.tutorEmail;
   }
 
@@ -149,23 +206,28 @@ app.post("/tuitions", async (req, res) => {
   res.status(201).json(result);
 });
 
-app.patch("/tuitions/:id/status", async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
+app.patch(
+  "/tuitions/:id/status",
+  verifyToken,
+  verifyAdmin,
+  async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
 
-  const filter = {
-    _id: new ObjectId(id),
-  };
-  const updatedDoc = {
-    $set: {
-      approvalStatus: status,
-    },
-  };
+    const filter = {
+      _id: new ObjectId(id),
+    };
+    const updatedDoc = {
+      $set: {
+        approvalStatus: status,
+      },
+    };
 
-  const result = await tuitionsCollection.updateOne(filter, updatedDoc);
+    const result = await tuitionsCollection.updateOne(filter, updatedDoc);
 
-  res.status(200).json(result);
-});
+    res.status(200).json(result);
+  },
+);
 
 app.patch("/tuitions/:id/active", async (req, res) => {
   const { id } = req.params;
@@ -191,14 +253,23 @@ app.delete("/tuitions/:id", async (req, res) => {
   res.status(200).json(result);
 });
 
-app.get("/applications", async (req, res) => {
+app.get("/applications", verifyToken, async (req, res) => {
   let query = {};
 
   if (req.query.studentEmail) {
+    if (req.user.email !== req.query.studentEmail) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
     query.studentEmail = req.query.studentEmail;
   }
 
   if (req.query.tutorEmail) {
+    if (req.user.email !== req.query.tutorEmail) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
     query.tutorEmail = req.query.tutorEmail;
   }
 
@@ -325,7 +396,7 @@ app.post("/payments", async (req, res) => {
   res.json({ success: false, message: "Payment verification failed" });
 });
 
-app.get("/payments", async (req, res) => {
+app.get("/payments", verifyToken, verifyAdmin, async (req, res) => {
   const cursor = paymentCollection.find();
   const result = await cursor.toArray();
   res.status(200).json(result);
