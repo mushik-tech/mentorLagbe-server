@@ -71,16 +71,28 @@ app.patch("/users/:id", async (req, res) => {
   res.status(200).json(result);
 });
 
-app.get("/tuitions", async (req, res) => {
-  let query = {};
+app.get("/featured-tuitions", async (req, res) => {
+  const query = {
+    isActive: true,
+    approvalStatus: "approved",
+  };
 
-  if (req.query.tutorEmail) {
-    query.tutorEmail = req.query.tutorEmail;
-  }
+  const cursor = tuitionsCollection
+    .find(query)
+    .sort({ createdAt: -1 })
+    .limit(6);
 
-  if (req.query.subject) {
-    query.subject = req.query.subject;
-  }
+  const result = await cursor.toArray();
+
+  res.status(200).json(result);
+});
+
+app.get("/public-tuitions", async (req, res) => {
+  let query = {
+    isActive: true,
+    approvalStatus: "approved",
+  };
+
   if (req.query.level) {
     query.classLevel = req.query.level;
   }
@@ -97,7 +109,19 @@ app.get("/tuitions", async (req, res) => {
     };
   }
 
-  const cursor = tuitionsCollection.find(query);
+  const cursor = tuitionsCollection.find(query).sort({ createdAt: -1 });
+  const tuitions = await cursor.toArray();
+  res.status(200).json(tuitions);
+});
+
+app.get("/tuitions", async (req, res) => {
+  let query = {};
+
+  if (req.query.tutorEmail) {
+    query.tutorEmail = req.query.tutorEmail;
+  }
+
+  const cursor = tuitionsCollection.find(query).sort({ createdAt: -1 });
   const tuitions = await cursor.toArray();
   res.status(200).json(tuitions);
 });
